@@ -1,0 +1,17 @@
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="http://www.limbo.com/LimboServiceSoap">
+    <soapenv:Header/>
+    <soapenv:Body>
+        <web:Version>2020</web:Version>
+        <web:RenderType>None</web:RenderType>
+        <web:PlaceId>2</web:PlaceId>
+        <web:MaxPlayers>10</web:MaxPlayers>
+        <web:JobId>Test</web:JobId>
+        <web:UniverseId>1</web:UniverseId>
+        <web:Matchmaking>1</web:Matchmaking>
+        <web:CreatorId>1</web:CreatorId>
+        <web:PlaceVersion>1</web:PlaceVersion>
+        <web:SiteURL>https://limbo.com</web:SiteURL>
+        <web:UDPPort>3456</web:UDPPort>
+        <web:PlaceFetchUrl>https://assetgame.limbo.com/asset/?id=1</web:PlaceFetchUrl>
+    </soapenv:Body>
+</soapenv:Envelope>
