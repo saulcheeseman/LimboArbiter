@@ -11,12 +11,12 @@ using LimboServiceSoap;
 
 class Program
 {
-    static async Task Main()
+    static void Main()
     {
         Console.ForegroundColor = ConsoleColor.Cyan;
         Console.WriteLine("Starting SOAP listener...");
         Console.ResetColor();
-        await StartSoapListenerAsync(8000);
+        StartSoapListener(8000);
     }
 
     public static int FindOpenPort(int startPort, int endPort)
@@ -46,7 +46,8 @@ class Program
         throw new Exception("No open ports found.");
     }
 
-    public static async Task<Process> StartRCCService(int port, string version, string renderType, int placeId, string jobId, int universeId, int matchmaking, int maxPlayers, int udpPort, int creatorId, int placeVersion, string siteUrl, string placeFetchUrl, bool isRetry = false)
+
+    public static Process StartRCCService(int port, string version, string renderType, int placeId, string jobId, int universeId, int matchmaking, int maxPlayers, int udpPort, int creatorId, int placeVersion, string siteUrl, string placeFetchUrl, bool isRetry = false)
     {
         string executablePath = version switch
         {
@@ -67,28 +68,51 @@ class Program
 
         var processStartInfo = new ProcessStartInfo
         {
-            FileName = executablePath,
-            Arguments = $"-console -verbose {port}",
+            FileName = "cmd.exe",
+            Arguments = $"/K \"{executablePath}\" -console -verbose {port}",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-            CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8
+            CreateNoWindow = false,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
         };
 
         var process = new Process
         {
-            StartInfo = processStartInfo
+            StartInfo = processStartInfo,
+            EnableRaisingEvents = true
         };
+
+        process.OutputDataReceived += new DataReceivedEventHandler((sender, args) =>
+        {
+            if (!string.IsNullOrWhiteSpace(args.Data))
+            {
+                if (args.Data.Contains("Failed to finish initializing game:"))
+                {
+                    LogError("RCC failed to start.");
+                    Console.WriteLine(args.Data);
+                }
+            }
+        });
+        process.ErrorDataReceived += new DataReceivedEventHandler((sender, args) =>
+        {
+            if (!string.IsNullOrWhiteSpace(args.Data))
+            {
+                if (args.Data.Contains("Failed to finish initializing game:"))
+                {
+                    LogError("RCC failed to start.");
+                    Console.WriteLine(args.Data);
+                }
+            }
+        });
 
         try
         {
             if (process.Start())
             {
-                await Task.WhenAll(
-                    ReadOutputAsync(process.StandardOutput),
-                    ReadOutputAsync(process.StandardError)
-                );
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
 
                 LogSuccess("RCCService started successfully.");
 
@@ -107,20 +131,7 @@ class Program
         }
     }
 
-
-    private static async Task ReadOutputAsync(StreamReader reader)
-    {
-        while (!reader.EndOfStream)
-        {
-            var line = await reader.ReadLineAsync();
-            if (line != null)
-            {
-                Console.WriteLine(line);
-            }
-        }
-    }
-
-    public static async Task SendSoapRequest(int port, string version, string renderType, int placeId, string jobId, int universeId, int matchmaking, int maxPlayers, int udpPort, int creatorId, int placeVersion, string siteUrl, string placeFetchUrl)
+    public static void SendSoapRequest(int port, string version, string renderType, int placeId, string jobId, int universeId, int matchmaking, int maxPlayers, int udpPort, int creatorId, int placeVersion, string siteUrl, string placeFetchUrl)
     {
         Console.WriteLine($"Sending SOAP request to port {port} with version {version} and render type {renderType}...");
 
@@ -133,12 +144,12 @@ class Program
         };
 
         var binding = new BasicHttpBinding();
-        var endpoint = new EndpointAddress($"http://localhost:{port}/yourWebServiceEndpoint");
+        var endpoint = new EndpointAddress($"http://localhost:{port}/RCCServiceSoap");
         var client = new RCCServiceSoapClient(binding, endpoint);
 
         try
         {
-            var response = await client.OpenJobExAsync(new Job
+            var response = client.OpenJobExAsync(new Job
             {
                 id = jobId,
                 expirationInSeconds = 120
@@ -156,7 +167,7 @@ class Program
         }
     }
 
-    public static async Task StartSoapListenerAsync(int port)
+    public static void StartSoapListener(int port)
     {
         var listener = new HttpListener();
         listener.Prefixes.Add($"http://localhost:{port}/");
@@ -168,8 +179,8 @@ class Program
         {
             try
             {
-                var context = await listener.GetContextAsync();
-                await HandleRequestAsync(context);
+                var context = listener.GetContext();
+                Task.Run(() => HandleRequestAsync(context));
             }
             catch (Exception ex)
             {
@@ -203,10 +214,10 @@ class Program
                 var (version, renderType, placeId, maxPlayers, jobId, universeId, matchmaking, creatorId, placeVersion, siteUrl, udpPort, placeFetchUrl) = ParseSoapRequest(requestData);
 
                 int openPort = FindOpenPort(31501, 33000);
-                var process = await StartRCCService(openPort, version, renderType, int.Parse(placeId), jobId, int.Parse(universeId), int.Parse(matchmaking), int.Parse(maxPlayers), int.Parse(udpPort), int.Parse(creatorId), int.Parse(placeVersion), siteUrl, placeFetchUrl);
+                var process = StartRCCService(openPort, version, renderType, int.Parse(placeId), jobId, int.Parse(universeId), int.Parse(matchmaking), int.Parse(maxPlayers), int.Parse(udpPort), int.Parse(creatorId), int.Parse(placeVersion), siteUrl, placeFetchUrl);
                 if (process != null)
                 {
-                    await SendSoapRequest(openPort, version, renderType, int.Parse(placeId), jobId, int.Parse(universeId), int.Parse(matchmaking), int.Parse(maxPlayers), int.Parse(udpPort), int.Parse(creatorId), int.Parse(placeVersion), siteUrl, placeFetchUrl);
+                    SendSoapRequest(openPort, version, renderType, int.Parse(placeId), jobId, int.Parse(universeId), int.Parse(matchmaking), int.Parse(maxPlayers), int.Parse(udpPort), int.Parse(creatorId), int.Parse(placeVersion), siteUrl, placeFetchUrl);
                     LogSuccess("Sent SOAP response to RCC.");
                 }
                 else
